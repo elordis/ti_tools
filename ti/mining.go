@@ -72,6 +72,8 @@ func makeYield(mean, width, _min, jump float64) float64 {
 	return 0.5*(mean+posAdjust) + 0.5*(p*_min+(1-p)*(mean-negAadjust))
 }
 
+// MakeAverageYields calculates average yield of a mining site. Note that it gives correct results only for mining
+// profiles with "modifyBySize" set to false.
 func (m *MiningProfileTemplate) MakeAverageYields() *BuildMaterials {
 	materials := BuildMaterials{ //nolint:exhaustruct
 		Water:       makeYield(m.WaterMean, m.WaterWidth, m.WaterMin, m.WaterJump),

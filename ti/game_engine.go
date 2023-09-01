@@ -201,11 +201,11 @@ func (e *GameEngine) ApplyConstraints(c SimulationConstraints) {
 	e.SimulationConstraints = c
 
 	for _, t := range e.techTemplates {
-		t.effectiveCost = int(float64(t.ResearchCost) * (1 + e.SimulationConstraints.TechBonus))
+		t.effectiveCost = int(float64(t.ResearchCost) / (1 + e.SimulationConstraints.TechBonus))
 	}
 
 	for _, t := range e.projectTemplates {
-		t.effectiveCost = int(float64(t.ResearchCost) * (1 + e.SimulationConstraints.ProjectBonus))
+		t.effectiveCost = int(float64(t.ResearchCost) / (1 + e.SimulationConstraints.ProjectBonus))
 	}
 
 	bodiesMap := make(map[string]struct{}, len(e.SimulationConstraints.MiningBodies))

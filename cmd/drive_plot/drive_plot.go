@@ -9,8 +9,8 @@ import (
 	"runtime/pprof"
 	"slices"
 
-	"github.com/elordis/ti_drive_plot/ti"
-	"github.com/elordis/ti_drive_plot/tiplot"
+	"github.com/elordis/ti_tools/ti"
+	"github.com/elordis/ti_tools/tiplot"
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/font"
 	"gonum.org/v1/plot/plotter"
@@ -75,16 +75,16 @@ func ResultPlotters(s []*ti.Ship) []plot.Plotter {
 }
 
 func main() {
-	templatePath := flag.String("t", "", "folder containing template JSON files")
+	templatePath := flag.String("t", "", "folder containing Terra Invicta template JSON files")
 	constraintsFile := flag.String("c", "", "JSON-encoded constraints file")
-	minDV := flag.Float64("dv", 10, "minimum delta-V to target")                           //nolint:gomnd
-	minCruiseAccel := flag.Float64("cra", 0.000001, "minimum allowed cruise acceleration") //nolint:gomnd
-	minCombatAccel := flag.Float64("coa", 0.000001, "minimum allowed combat acceleration") //nolint:gomnd
-	maxRPCost := flag.Int("rp", 10000000, "maximum allowed RP cost for drive assembly")    //nolint:gomnd
-	minPayload := flag.Float64("pl", 200, "maximum allowed RP cost for drive assembly")    //nolint:gomnd
-	minPtpmd := flag.Float64("ptpmd", 200, "maximum allowed RP cost for drive assembly")   //nolint:gomnd
+	minDV := flag.Float64("dv", 10, "minimum delta-V to target (Kps)")                                   //nolint:gomnd
+	minCruiseAccel := flag.Float64("cra", 0.000001, "minimum allowed cruise acceleration (G's)")         //nolint:gomnd
+	minCombatAccel := flag.Float64("coa", 0.000001, "minimum allowed combat acceleration (G's)")         //nolint:gomnd
+	maxRPCost := flag.Int("rp", 10000000, "maximum allowed RP cost for drive assembly")                  //nolint:gomnd
+	minPayload := flag.Float64("pl", 200, "minimum allowed payload weight (T)")                          //nolint:gomnd
+	minPtpmd := flag.Float64("ptpmd", 200, "minimum allowed cost-efficiency for drive assembly (T/day)") //nolint:gomnd
 	outputFile := flag.String("o", "output.png", "file to write output to")
-	outputSize := flag.Int("size", 1000, "size of output image in pixels") //nolint:gomnd
+	outputSize := flag.Int("size", 1000, "size of output image") //nolint:gomnd
 	logScale := flag.Bool("log", false, "use logarighmic scale")
 	cpuprofile := flag.String("cpuprofile", "", "(DEBUG) write cpu profile to file")
 
@@ -145,12 +145,28 @@ func main() {
 		results = append(results, currentShip)
 	})
 
-	for _, r := range results {
-		log.Printf("%s: %.0f T, %.0f T/day\n", r.DriveAssembly, r.PayloadMassT, r.PayloadTPerMiningDay())
+	if len(results) == 0 {
+		log.Println("no drives satisfy constraints")
+
+		return
 	}
 
+	for _, r := range results {
+		log.Printf(
+			"%s: Pl %.0f T, PTpMD %.0f T/day, DV %.0f Kps, CrA %.3f G, CoA %.3f G\n",
+			r.DriveAssembly,
+			r.PayloadMassT,
+			r.PayloadTPerMiningDay(),
+			r.DVKps(),
+			r.CruiseAccelerationG(),
+			r.CombatAccelerationG(),
+		)
+	}
+
+	log.Printf("drives total: %d\n", len(results))
+
 	p := plot.New()
-	p.Title.Text = "Payload per Mining Day / Payload Diagram\n"
+	p.Title.Text = "Payload per Mining Day / Maximum Payload Diagram\n"
 	p.Title.Text += fmt.Sprintf(
 		"Mining: %.2f*%v+(%s)\n",
 		1+engine.SimulationConstraints.MiningBonus,
@@ -171,7 +187,7 @@ func main() {
 		*minPayload,
 		*minPtpmd,
 	)
-	p.X.Label.Text = "Payload (T)"
+	p.X.Label.Text = "Maximum Payload (T)"
 	p.Y.Label.Text = "Payload per Mining Day (T/day)"
 	p.X.Min, p.X.Max = *minPayload, slices.MaxFunc(results, CmpMaxPayload).PayloadMassT
 	p.Y.Min, p.Y.Max = *minPtpmd, slices.MaxFunc(results, CmpMaxPtmpd).PayloadTPerMiningDay()
