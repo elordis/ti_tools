@@ -1,6 +1,9 @@
 package ti
 
-import "math"
+import (
+	"fmt"
+	"math"
+)
 
 type DriveAssembly struct {
 	Drive         *DriveTemplate
@@ -9,6 +12,46 @@ type DriveAssembly struct {
 	EVUtility     *UtilityModuleTemplate
 	ThrustUtility *UtilityModuleTemplate
 	Engine        *GameEngine
+}
+
+func (d *DriveAssembly) String() string {
+	if d == nil {
+		return NameForMissing
+	}
+
+	driveName := NameForMissing
+	if d.Drive != nil {
+		driveName = d.Drive.FriendlyName
+	}
+
+	powerPlantName := NameForMissing
+	if d.PowerPlant != nil {
+		powerPlantName = d.PowerPlant.FriendlyName
+	}
+
+	radiatorName := NameForMissing
+	if d.Radiator != nil {
+		radiatorName = d.Radiator.FriendlyName
+	}
+
+	evName := NameForMissing
+	if d.EVUtility != nil {
+		evName = d.EVUtility.FriendlyName
+	}
+
+	thrustName := NameForMissing
+	if d.ThrustUtility != nil {
+		thrustName = d.ThrustUtility.FriendlyName
+	}
+
+	return fmt.Sprintf(
+		"%s %s %s %s %s",
+		abbreviate(driveName, AbbrLetters, true),
+		abbreviate(powerPlantName, AbbrLetters, true),
+		abbreviate(radiatorName, AbbrLetters, false),
+		abbreviate(evName, AbbrLetters, false),
+		abbreviate(thrustName, AbbrLetters, false),
+	)
 }
 
 func (d *DriveAssembly) IsValid() bool {

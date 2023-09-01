@@ -2,42 +2,23 @@ package tiplot
 
 import (
 	"image/color"
+	"math"
+	"strconv"
 
 	"github.com/elordis/ti_drive_plot/ti"
+	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/vg"
 	"gonum.org/v1/plot/vg/draw"
 )
 
+const FourtyFiveDegree = math.Pi / 4
+
 //nolint:gomnd
-func DriveStyle(d *ti.DriveTemplate) (draw.LineStyle, draw.GlyphStyle) {
-	l := draw.LineStyle{ //nolint:exhaustruct
-		Color: color.Black,
-		Width: 1,
-	}
-
-	name, number := d.DataName[:len(d.DataName)-2], d.DataName[len(d.DataName)-2:]
-	switch number {
-	case "x1":
-		l.Dashes = []vg.Length{18}
-	case "x2":
-		l.Dashes = []vg.Length{15}
-	case "x3":
-		l.Dashes = []vg.Length{12}
-	case "x4":
-		l.Dashes = []vg.Length{9}
-	case "x5":
-		l.Dashes = []vg.Length{6}
-	case "x6":
-		l.Dashes = []vg.Length{3}
-	}
-
-	g := draw.GlyphStyle{
-		Color:  color.Black,
-		Radius: 4, //nolint:gomnd
-		Shape:  draw.CrossGlyph{},
-	}
-
-	var _color color.RGBA
+func DriveGlyph(d *ti.DriveTemplate) draw.GlyphStyle {
+	name := d.DataName[:len(d.DataName)-2]
+	_color := color.RGBA{R: 0, G: 0, B: 0, A: 255}
+	radius := vg.Length(4) //nolint:gomnd
+	shape := draw.GlyphDrawer(draw.CrossGlyph{})
 
 	// SquareGlyph
 	// TriangleGlyph
@@ -64,11 +45,11 @@ func DriveStyle(d *ti.DriveTemplate) (draw.LineStyle, draw.GlyphStyle) {
 
 		switch name {
 		case "LarsDrive":
-			g.Shape = draw.SquareGlyph{}
+			shape = draw.SquareGlyph{}
 		case "FissionSpinnerDrive":
-			g.Shape = draw.TriangleGlyph{}
+			shape = draw.TriangleGlyph{}
 		case "PegasusDrive":
-			g.Shape = draw.RingGlyph{}
+			shape = draw.RingGlyph{}
 		}
 	case ti.PPCGasCoreFission:
 		_color = color.RGBA{R: 137, G: 176, B: 38, A: 255}
@@ -90,8 +71,40 @@ func DriveStyle(d *ti.DriveTemplate) (draw.LineStyle, draw.GlyphStyle) {
 		_color = color.RGBA{R: 101, G: 199, B: 211, A: 255}
 	}
 
-	l.Color = _color
-	g.Color = _color
+	return draw.GlyphStyle{
+		Color:  _color,
+		Radius: radius,
+		Shape:  shape,
+	}
+}
 
-	return l, g
+type MajorLogTicks struct {
+}
+
+func (t MajorLogTicks) Ticks(min, max float64) []plot.Tick {
+	if min <= 0 || max <= 0 {
+		panic("Values must be greater than 0 for a log scale.")
+	}
+
+	var ticks []plot.Tick
+
+	val := math.Pow10(int(math.Log10(min)))
+	max = math.Pow10(int(math.Ceil(math.Log10(max))))
+
+	for val < max {
+		for i := 1; i < 10; i++ {
+			v := val * float64(i)
+			tick := plot.Tick{
+				Value: v,
+				Label: strconv.FormatFloat(v, 'f', -1, 64),
+			}
+			ticks = append(ticks, tick)
+		}
+
+		val *= 10
+	}
+
+	ticks = append(ticks, plot.Tick{Value: val, Label: strconv.FormatFloat(val, 'f', -1, 64)})
+
+	return ticks
 }

@@ -54,6 +54,14 @@ type DriveTemplate struct {
 	PerTankPropellantMaterials BuildMaterialsWeights `json:"perTankPropellantMaterials,omitempty"`
 }
 
+func (d *DriveTemplate) String() string {
+	if d == nil {
+		return NameForMissing
+	}
+
+	return abbreviate(d.FriendlyName, AbbrLetters, true)
+}
+
 func (d *DriveTemplate) IsSelfPowered() bool {
 	switch d.DriveClassification { //nolint:exhaustive
 	case DCChemical, DCFissionPulse, DCFusionPulse:

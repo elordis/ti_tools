@@ -3,10 +3,11 @@
         "Mars",
         "Luna"
     ],
+    "mining_bonus": 0,
     "mining_flat": {
         "antimatter": 0,
         "exotics": 0
     },
-    "tech_speed": 1,
-    "project_speed": 2
+    "tech_bonus": 0,
+    "project_bonus": 1
 }

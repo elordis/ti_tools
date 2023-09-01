@@ -5,209 +5,88 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"math"
 	"os"
 	"runtime/pprof"
 	"slices"
-	"strings"
 
 	"github.com/elordis/ti_drive_plot/ti"
 	"github.com/elordis/ti_drive_plot/tiplot"
 	"gonum.org/v1/plot"
+	"gonum.org/v1/plot/font"
 	"gonum.org/v1/plot/plotter"
+	"gonum.org/v1/plot/text"
+	"gonum.org/v1/plot/vg"
+	"gonum.org/v1/plot/vg/draw"
 )
 
-func Abbreviate(s string, abbrevLimit int, keepLast bool) string {
-	abbrev := ""
-	parts := strings.Split(s, " ")
-
-	max := len(parts)
-	if keepLast {
-		max--
+func ShipIsWorseThan(s *ti.Ship) func(*ti.Ship) bool {
+	return func(other *ti.Ship) bool {
+		return (s.DriveAssembly.Drive == other.DriveAssembly.Drive &&
+			s.PayloadMassT > other.PayloadMassT &&
+			s.PayloadTPerMiningDay() > other.PayloadTPerMiningDay())
 	}
-
-	for i := 0; i < max; i++ {
-		abbrev += parts[i][:abbrevLimit]
-	}
-
-	if keepLast {
-		abbrev += " " + parts[max]
-	}
-
-	return abbrev
 }
 
-func ApproximatelyEqual(a, b, delta float64) bool {
-	return math.Abs(a-b) < delta*(a+b)/2
-}
-
-type PlotNailer interface {
-	plot.Plotter
-	plot.Thumbnailer
-}
-
-type Result struct {
-	MinShip *ti.Ship
-	MaxShip *ti.Ship
-}
-
-func (r *Result) Name() string {
-	evName := "None"
-	if r.MinShip.DriveAssembly.EVUtility != nil {
-		evName = r.MinShip.DriveAssembly.EVUtility.FriendlyName
+func ShipIsBetterThan(s *ti.Ship) func(*ti.Ship) bool {
+	return func(other *ti.Ship) bool {
+		return (s.DriveAssembly.Drive == other.DriveAssembly.Drive &&
+			other.PayloadMassT > s.PayloadMassT &&
+			other.PayloadTPerMiningDay() > s.PayloadTPerMiningDay())
 	}
-
-	thrustName := "None"
-	if r.MinShip.DriveAssembly.ThrustUtility != nil {
-		thrustName = r.MinShip.DriveAssembly.ThrustUtility.FriendlyName
-	}
-
-	return fmt.Sprintf(
-		"%s %s %s %s %s",
-		Abbreviate(r.MinShip.DriveAssembly.Drive.FriendlyName, 2, true),      //nolint:gomnd
-		Abbreviate(r.MinShip.DriveAssembly.PowerPlant.FriendlyName, 2, true), //nolint:gomnd
-		Abbreviate(r.MinShip.DriveAssembly.Radiator.FriendlyName, 2, false),  //nolint:gomnd
-		Abbreviate(evName, 2, false),                                         //nolint:gomnd
-		Abbreviate(thrustName, 2, false),                                     //nolint:gomnd
-	)
 }
 
-func (r *Result) String() string {
-	return fmt.Sprintf(
-		"%s - %drp Min: %.0ft %.0ft/d Max: %.0ft %.0ft/d",
-		r.Name(),
-		r.MinShip.DriveAssembly.EffectiveRPCost(),
-		r.MinShip.PayloadMassT,
-		r.MinShip.PayloadTPerMiningDay(),
-		r.MaxShip.PayloadMassT,
-		r.MaxShip.PayloadTPerMiningDay(),
-	)
+func CmpMaxPayload(a, b *ti.Ship) int {
+	return cmp.Compare(a.PayloadMassT, b.PayloadMassT)
 }
 
-const Nearness = 0.05
+func CmpMaxPtmpd(a, b *ti.Ship) int {
+	return cmp.Compare(a.PayloadTPerMiningDay(), b.PayloadTPerMiningDay())
+}
 
-func (r *Result) IsBetterThan(s *Result) bool { //nolint:gocognit
-	if r.MinShip.DriveAssembly.Drive != s.MinShip.DriveAssembly.Drive {
-		return false
-	}
+func ResultPlotters(s []*ti.Ship) []plot.Plotter {
+	xys := make(plotter.XYs, len(s))
+	names := make([]string, len(s))
+	styles := make([]text.Style, len(s))
 
-	minorBetter, minorWorse, majorBetter, majorWorse := 0, 0, 0, 0
-
-	if ApproximatelyEqual(r.MinShip.PayloadMassT, s.MinShip.PayloadMassT, Nearness) { //nolint:nestif
-		if r.MinShip.PayloadMassT < s.MinShip.PayloadMassT {
-			minorBetter++
-		} else {
-			minorWorse++
-		}
-	} else {
-		if r.MinShip.PayloadMassT < s.MinShip.PayloadMassT {
-			majorBetter++
-		} else {
-			majorWorse++
+	for i := range s {
+		xys[i].X, xys[i].Y = s[i].PayloadMassT, s[i].PayloadTPerMiningDay()
+		names[i] = s[i].DriveAssembly.Drive.String()
+		styles[i] = text.Style{ //nolint:exhaustruct
+			Font:     font.From(plotter.DefaultFont, plotter.DefaultFontSize),
+			Rotation: tiplot.FourtyFiveDegree,
+			Handler:  plot.DefaultTextHandler,
 		}
 	}
 
-	if ApproximatelyEqual(r.MinShip.PayloadTPerMiningDay(), s.MinShip.PayloadTPerMiningDay(), Nearness) { //nolint:nestif
-		if r.MinShip.PayloadTPerMiningDay() > s.MinShip.PayloadTPerMiningDay() {
-			minorBetter++
-		} else {
-			minorWorse++
-		}
-	} else {
-		if r.MinShip.PayloadTPerMiningDay() > s.MinShip.PayloadTPerMiningDay() {
-			majorBetter++
-		} else {
-			majorWorse++
-		}
-	}
-
-	if ApproximatelyEqual(r.MaxShip.PayloadMassT, s.MaxShip.PayloadMassT, Nearness) { //nolint:nestif
-		if r.MaxShip.PayloadMassT > s.MaxShip.PayloadMassT {
-			minorBetter++
-		} else {
-			minorWorse++
-		}
-	} else {
-		if r.MaxShip.PayloadMassT > s.MaxShip.PayloadMassT {
-			majorBetter++
-		} else {
-			majorWorse++
-		}
-	}
-
-	if ApproximatelyEqual(r.MaxShip.PayloadTPerMiningDay(), s.MaxShip.PayloadTPerMiningDay(), Nearness) { //nolint:nestif
-		if r.MaxShip.PayloadTPerMiningDay() > s.MaxShip.PayloadTPerMiningDay() {
-			minorBetter++
-		} else {
-			minorWorse++
-		}
-	} else {
-		if r.MaxShip.PayloadTPerMiningDay() > s.MaxShip.PayloadTPerMiningDay() {
-			majorBetter++
-		} else {
-			majorWorse++
-		}
-	}
-
-	if majorBetter == 0 && majorWorse == 0 {
-		return minorBetter > minorWorse
-	}
-
-	if majorBetter > 0 && majorWorse > 0 {
-		return false
-	}
-
-	return majorBetter > majorWorse
-}
-
-func (r *Result) IsWorseThan(s *Result) bool {
-	return s.IsBetterThan(r)
-}
-
-func (r *Result) PlotLine() ([]PlotNailer, error) {
-	elems := make([]PlotNailer, 2) //nolint:gomnd
-	line, points, err := plotter.NewLinePoints(
-		plotter.XYs{
-			{
-				X: r.MinShip.PayloadMassT,
-				Y: r.MinShip.PayloadTPerMiningDay(),
-			},
-			{
-				X: r.MaxShip.PayloadMassT,
-				Y: r.MaxShip.PayloadTPerMiningDay(),
+	return []plot.Plotter{
+		&plotter.Scatter{ //nolint:exhaustruct
+			XYs: xys,
+			GlyphStyleFunc: func(i int) draw.GlyphStyle {
+				return tiplot.DriveGlyph(s[i].DriveAssembly.Drive)
 			},
 		},
-	)
-
-	if err != nil {
-		return nil, fmt.Errorf("generating line for result: %w", err)
+		&plotter.Labels{
+			XYs:       xys,
+			Labels:    names,
+			TextStyle: styles,
+			Offset:    vg.Point{X: 4, Y: 4}, //nolint:gomnd
+		},
 	}
-
-	line.LineStyle, points.GlyphStyle = tiplot.DriveStyle(r.MinShip.DriveAssembly.Drive)
-	elems[0], elems[1] = line, points
-
-	return elems, nil
-}
-
-func CmpMaxPayload(a, b *Result) int {
-	return cmp.Compare(a.MaxShip.PayloadMassT, b.MaxShip.PayloadMassT)
-}
-
-func CmpMaxPtmpd(a, b *Result) int {
-	return cmp.Compare(a.MaxShip.PayloadTPerMiningDay(), b.MaxShip.PayloadTPerMiningDay())
 }
 
 func main() {
 	templatePath := flag.String("t", "", "folder containing template JSON files")
 	constraintsFile := flag.String("c", "", "JSON-encoded constraints file")
-	minDV := flag.Float64("dv", 10, "minimum delta-V to target")                            //nolint:gomnd
-	minCruiseAccel := flag.Float64("cra", 0.001, "minimum allowed cruise acceleration")     //nolint:gomnd
-	minCombatAccel := flag.Float64("coa", 0.001, "minimum allowed combat acceleration")     //nolint:gomnd
-	maxRPCost := flag.Int("rp", 10000000, "maximum allowed RP cost for drive assembly")     //nolint:gomnd
-	minPtpmd := flag.Float64("ptpmd", 200, "minimum allowed payload tonns per mining days") //nolint:gomnd
-	minPayload := flag.Float64("pl", 500, "minimum allowed payload tonns per mining days")  //nolint:gomnd
+	minDV := flag.Float64("dv", 10, "minimum delta-V to target")                           //nolint:gomnd
+	minCruiseAccel := flag.Float64("cra", 0.000001, "minimum allowed cruise acceleration") //nolint:gomnd
+	minCombatAccel := flag.Float64("coa", 0.000001, "minimum allowed combat acceleration") //nolint:gomnd
+	maxRPCost := flag.Int("rp", 10000000, "maximum allowed RP cost for drive assembly")    //nolint:gomnd
+	minPayload := flag.Float64("pl", 200, "maximum allowed RP cost for drive assembly")    //nolint:gomnd
+	minPtpmd := flag.Float64("ptpmd", 200, "maximum allowed RP cost for drive assembly")   //nolint:gomnd
 	outputFile := flag.String("o", "output.png", "file to write output to")
-	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to file")
+	outputSize := flag.Int("size", 1000, "size of output image in pixels") //nolint:gomnd
+	logScale := flag.Bool("log", false, "use logarighmic scale")
+	cpuprofile := flag.String("cpuprofile", "", "(DEBUG) write cpu profile to file")
 
 	flag.Parse()
 
@@ -240,52 +119,38 @@ func main() {
 
 	log.Println("simulation started")
 
-	results := make([]*Result, 0, len(engine.DriveTemplates))
+	results := make([]*ti.Ship, 0, len(engine.DriveTemplates))
 	engine.ForAllDriveAssemblies(false, func(d *ti.DriveAssembly) {
 		rpCost := d.EffectiveRPCost()
 		if rpCost > *maxRPCost {
 			return
 		}
 		maxPayload := d.MaxPayloadConstrained(*minDV, *minCruiseAccel, *minCombatAccel)
-		if maxPayload <= *minPayload {
+		if maxPayload < *minPayload {
 			return
 		}
-		maxShip := &ti.Ship{
+		currentShip := &ti.Ship{
 			DriveAssembly: d,
 			Tanks:         d.TanksForPayloadDV(maxPayload, *minDV),
 			PayloadMassT:  maxPayload,
 		}
-		if maxShip.PayloadTPerMiningDay() < *minPtpmd {
+		if currentShip.PayloadTPerMiningDay() < *minPtpmd {
 			return
 		}
-		minShip := &ti.Ship{
-			DriveAssembly: d,
-			Tanks:         d.TanksForPayloadDV(maxPayload, *minDV),
-			PayloadMassT:  maxPayload,
-		}
-		low := *minPayload
-		high := maxShip.PayloadMassT
-		for high-low > 1 {
-			minShip.PayloadMassT = (high + low) / 2 //nolint:gomnd
-			minShip.Tanks = d.TanksForPayloadDV(minShip.PayloadMassT, *minDV)
 
-			if minShip.PayloadTPerMiningDay() < *minPtpmd {
-				low = minShip.PayloadMassT
-			} else {
-				high = minShip.PayloadMassT
-			}
-		}
-		r := Result{MinShip: minShip, MaxShip: maxShip}
-
-		if slices.ContainsFunc(results, r.IsWorseThan) {
+		if slices.ContainsFunc(results, ShipIsBetterThan(currentShip)) {
 			return
 		}
-		results = slices.DeleteFunc(results, r.IsBetterThan)
-		results = append(results, &r)
+		results = slices.DeleteFunc(results, ShipIsWorseThan(currentShip))
+		results = append(results, currentShip)
 	})
 
+	for _, r := range results {
+		log.Printf("%s: %.0f T, %.0f T/day\n", r.DriveAssembly, r.PayloadMassT, r.PayloadTPerMiningDay())
+	}
+
 	p := plot.New()
-	p.Title.Text = "Payload per Mining Day / Payload\n"
+	p.Title.Text = "Payload per Mining Day / Payload Diagram\n"
 	p.Title.Text += fmt.Sprintf(
 		"Mining: %.2f*%v+(%s)\n",
 		1+engine.SimulationConstraints.MiningBonus,
@@ -293,42 +158,35 @@ func main() {
 		engine.SimulationConstraints.MiningFlat,
 	)
 	p.Title.Text += fmt.Sprintf(
-		"DV: %.0f Kps, Cruise: %.3f G, Combat: %.3f G, RP: %d, PTpMD: %.0f T/d, Payload: %.0f T",
+		"Research: %.2f Tech Bonus, %.2f Project Bonus, \n",
+		engine.SimulationConstraints.TechBonus,
+		engine.SimulationConstraints.ProjectBonus,
+	)
+	p.Title.Text += fmt.Sprintf(
+		"DV: %.0f Kps, Cruise: %.3f G, Combat: %.3f G, RP: %d, Payload: %.0f T, PTperMD: %.0f T/day",
 		*minDV,
 		*minCruiseAccel,
 		*minCombatAccel,
 		*maxRPCost,
-		*minPtpmd,
 		*minPayload,
+		*minPtpmd,
 	)
 	p.X.Label.Text = "Payload (T)"
 	p.Y.Label.Text = "Payload per Mining Day (T/day)"
-	p.X.Min, p.X.Max = *minPayload, slices.MaxFunc(results, CmpMaxPayload).MaxShip.PayloadMassT
-	p.Y.Min, p.Y.Max = *minPtpmd, slices.MaxFunc(results, CmpMaxPtmpd).MaxShip.PayloadTPerMiningDay()
-	// p.X.Scale, p.Y.Scale = plot.LogScale{}, plot.LogScale{}
-	// p.X.Tick.Marker, p.X.Tick.Marker = plot.LogTicks{Prec: -1}, plot.LogTicks{Prec: -1}
-	p.Legend = plot.NewLegend()
-	p.Legend.ThumbnailWidth = 50
-	p.Add(plotter.NewGrid())
+	p.X.Min, p.X.Max = *minPayload, slices.MaxFunc(results, CmpMaxPayload).PayloadMassT
+	p.Y.Min, p.Y.Max = *minPtpmd, slices.MaxFunc(results, CmpMaxPtmpd).PayloadTPerMiningDay()
 
-	for _, r := range results {
-		elems, err := r.PlotLine()
-		if err != nil {
-			log.Fatalf("generating plot data for '%s': %s", r, err)
-		}
-
-		elemsThumb := make([]plot.Thumbnailer, len(elems))
-
-		for i, e := range elems {
-			p.Add(e)
-			elemsThumb[i] = e
-		}
-
-		p.Legend.Add(r.Name(), elemsThumb...)
-		log.Println(r)
+	if *logScale {
+		p.X.Scale, p.Y.Scale = plot.LogScale{}, plot.LogScale{}
+		p.X.Tick.Marker, p.Y.Tick.Marker = tiplot.MajorLogTicks{}, tiplot.MajorLogTicks{}
+		p.X.Tick.Label.Rotation = -tiplot.FourtyFiveDegree
+		p.X.Tick.Label.XAlign, p.X.Tick.Label.YAlign = text.XLeft, text.YTop
 	}
 
-	err = p.Save(1000, 1000, *outputFile) //nolint:gomnd
+	p.Add(plotter.NewGrid())
+	p.Add(ResultPlotters(results)...)
+
+	err = p.Save(vg.Length(*outputSize), vg.Length(*outputSize), *outputFile)
 	if err != nil {
 		log.Fatalf("saving plot: %s", err)
 	}
