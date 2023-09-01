@@ -1,0 +1,14 @@
+{
+    "mining_bodies": [
+        "Mars",
+        "Mercury",
+        "Luna",
+        "Ceres"
+    ],
+    "mining_flat": {
+        "antimatter": 1,
+        "exotics": 100000
+    },
+    "tech_speed": 1,
+    "project_speed": 2
+}
