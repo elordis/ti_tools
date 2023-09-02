@@ -183,12 +183,12 @@ func (d *DriveAssembly) MaxPayloadConstrained(dv, cruiseAccel, combatAccel float
 	cruiseAccelMps2 := cruiseAccel * G
 	cruiseTotalMassT := d.ModifiedThrustN() / cruiseAccelMps2 / 1000 //nolint:gomnd
 	cruiseFuelT := cruiseTotalMassT * (1 - math.Pow(math.E, -dv/d.ModifiedEVKps()))
-	cruisePayload := cruiseTotalMassT - d.MassT() - FuelTPerTank*max(1, math.Floor(cruiseFuelT/FuelTPerTank))
+	cruisePayload := cruiseTotalMassT - d.MassT() - FuelTPerTank*max(1, math.Ceil(cruiseFuelT/FuelTPerTank))
 
 	combatAccelMps2 := combatAccel * G
 	combatTotalMassT := d.Drive.ThrustCap * d.ModifiedThrustN() / combatAccelMps2 / 1000 //nolint:gomnd
 	combatFuelT := combatTotalMassT * (1 - math.Pow(math.E, -dv/d.ModifiedEVKps()))
-	combatPayload := combatTotalMassT - d.MassT() - FuelTPerTank*max(1, math.Floor(combatFuelT/FuelTPerTank))
+	combatPayload := combatTotalMassT - d.MassT() - FuelTPerTank*max(1, math.Ceil(combatFuelT/FuelTPerTank))
 
 	return max(0, min(cruisePayload, combatPayload))
 }
