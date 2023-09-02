@@ -23,7 +23,7 @@ with various drives installed.
 Some of the plots even included a very important stat: drive cost.
 Those cost calculations and realiztion that no one ever builds model ships inspirde creation of this tool.
 
-The main idea behind it is that when picking a drive player already hase *some* planned scenario for using it, e.g.
+The main idea behind it is that when picking a drive player already has *some* planned scenario for using it, e.g.
 early interceptor or Alpha-base-busting dreadnought. So, when modeling drives you shouldn't try to see how a certain
 drive performs on a certain ship but rather what kind of ship does drive allow to build (given certain constraints)
 and how economically effective that will be.
@@ -179,7 +179,7 @@ $ drive_plot -t /mnt/c/Program\ Files\ \(x86\)/Steam/steamapps/common/Terra\ Inv
 2023/09/01 16:22:40 FiDr x6 GaCoFiRe VI NaFi LiHyCo -: Pl 11903 T, PTpMD 803 T/day, DV 10 Kps, CrA 0.199 G, CoA 3.974 G
 2023/09/01 16:22:40 drives total: 72
 ```
-![Alt text](examples/drive_plot/alpha_chad.png)
+![Alt text](examples/drive_plot/interceptor.png)
 
 ```
 $ drive_plot -t /mnt/c/Program\ Files\ \(x86\)/Steam/steamapps/common/Terra\ Invicta/TerraInvicta_Data/StreamingAssets/Templates/ -c examples/drive_plot/interceptor.json --dv 1000 --pl 20000 -coa 0.1 -cra 0.01 --log -o alpha_chad.png
